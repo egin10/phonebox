@@ -311,6 +311,8 @@ public sealed class ClaudeCredentialDir
 {
     public string Label { get; set; } = "";
     public string Dir { get; set; } = "";
+    /// <summary>The folder with a leading ~ turned into the home folder.</summary>
+    public string FullPath() => Dir.StartsWith('~') ? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + Dir[1..] : Dir;
 }
 
 public sealed class CursorConfig

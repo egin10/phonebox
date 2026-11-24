@@ -74,6 +74,7 @@ public sealed partial class SessionMonitor(ILogger<SessionMonitor> log, ConfigSt
         {
             var list = new List<AgentSession>();
             try { list.AddRange(ReadClaude(titles: ShareTitles)); } catch (Exception ex) { log.LogDebug("claude sessions: {Msg}", ex.Message); }
+            list.AddRange(ReadExtraClaude(config?.Get().Claude.ExtraCredentialDirs ?? []));
             try { list.AddRange(ReadCodex()); } catch (Exception ex) { log.LogDebug("codex sessions: {Msg}", ex.Message); }
             // OpenCode sessions are off until Settings › General › "Show OpenCode sessions" is enabled; while off,
             // the service is not read at all — not even the every-2-seconds GET.
@@ -127,6 +128,36 @@ public sealed partial class SessionMonitor(ILogger<SessionMonitor> log, ConfigSt
     /// <summary>The home to read a session's conversation from: null for a native session, and for a WSL session only
     /// while its distro still runs (asked right before the read, so a distro that stopped since is not started by it).</summary>
     /// <param name="usable">False for a WSL session whose distro has stopped: nothing may be read for it.</param>
+    // the extra Claude Code config folder each session was read from, for its conversation (session id -> folder)
+    private volatile IReadOnlyDictionary<string, string> _extraDirs = new Dictionary<string, string>();
+
+    /// <summary>The extra Claude Code config folder a session runs from, or null for ~/.claude and WSL.</summary>
+    public string? ConversationClaudeDir(string sessionId) => _extraDirs.TryGetValue(sessionId, out var dir) ? dir : null;
+
+    /// <summary>Claude Code sessions of the extra config folders (Settings › Claude Code › other accounts).</summary>
+    internal List<AgentSession> ReadExtraClaude(IReadOnlyList<ClaudeCredentialDir> extra, Func<int, bool>? isAlive = null)
+    {
+        var list = new List<AgentSession>();
+        var dirs = new Dictionary<string, string>();
+        foreach (var d in extra)
+        {
+            var dir = d.FullPath();
+            try
+            {
+                foreach (var s in ReadClaude(isAlive: isAlive, titles: ShareTitles, configDir: dir))
+                {
+                    // a folder listed twice (once with ~, once spelled out) shows its sessions once
+                    if (dirs.ContainsKey(s.Id)) continue;
+                    list.Add(s);
+                    dirs[s.Id] = dir;
+                }
+            }
+            catch (Exception ex) { log.LogDebug("claude sessions ({Label}): {Msg}", d.Label, ex.Message); }
+        }
+        _extraDirs = dirs;
+        return list;
+    }
+
     public string? ConversationHome(string sessionId, out bool usable, Func<string, bool>? isRunning = null)
     {
         usable = true;
@@ -188,12 +219,13 @@ public sealed partial class SessionMonitor(ILogger<SessionMonitor> log, ConfigSt
     /// home on the \\wsl.localhost share): whether the Linux process with this PID and start time (the status file's
     /// procStart, in clock ticks) still runs. Its PIDs mean nothing to Windows, so they are neither checked against
     /// Windows processes nor handed on (<see cref="AgentSession.Pid"/> stays null).</param>
+    /// <param name="configDir">A Claude Code config folder (CLAUDE_CONFIG_DIR) to read instead of &lt;home&gt;/.claude.</param>
     internal static IEnumerable<AgentSession> ReadClaude(string? homeDir = null, Func<int, bool>? isAlive = null, bool titles = false,
-        Func<int, long?, bool>? linuxAlive = null)
+        Func<int, long?, bool>? linuxAlive = null, string? configDir = null)
     {
-        var home = homeDir ?? Home;
+        var claudeDir = configDir ?? Path.Combine(homeDir ?? Home, ".claude");
         var aliveCheck = isAlive ?? Alive;
-        var dir = Path.Combine(home, ".claude", "sessions");
+        var dir = Path.Combine(claudeDir, "sessions");
         if (!Directory.Exists(dir)) yield break;
         foreach (var file in Directory.EnumerateFiles(dir, "*.json"))
         {
@@ -231,7 +263,7 @@ public sealed partial class SessionMonitor(ILogger<SessionMonitor> log, ConfigSt
                     Since: Long(r, "statusUpdatedAt") ?? Long(r, "updatedAt") ?? 0,
                     StartedAt: Long(r, "startedAt") ?? 0,
                     Pid: linuxAlive is null ? pid : null,
-                    Title: titles ? ClaudeTitle(home, r, cwd, name, project) : null);
+                    Title: titles ? ClaudeTitle(claudeDir, r, cwd, name, project) : null);
             }
             catch { /* file was being written: retry on the next pass */ }
             if (s is not null) yield return s;
@@ -248,13 +280,13 @@ public sealed partial class SessionMonitor(ILogger<SessionMonitor> log, ConfigSt
     /// transcript at ~/.claude/projects/&lt;folder&gt;/&lt;sessionId&gt;.jsonl. Only the two title records are read: no
     /// prompts, replies or tool arguments. Null while the chat has no title yet.
     /// </summary>
-    internal static string? ReadClaudeTitle(string home, string cwd, string sessionId)
+    internal static string? ReadClaudeTitle(string claudeDir, string cwd, string sessionId)
     {
         try
         {
             // Claude Code names the folder after the working directory with every other character turned into "-"
             var folder = System.Text.RegularExpressions.Regex.Replace(cwd, "[^A-Za-z0-9]", "-");
-            var path = Path.Combine(home, ".claude", "projects", folder, sessionId + ".jsonl");
+            var path = Path.Combine(claudeDir, "projects", folder, sessionId + ".jsonl");
             var info = new FileInfo(path);
             if (!info.Exists) return null;
             TitleCache.TryGetValue(path, out var cached);
@@ -304,10 +336,10 @@ public sealed partial class SessionMonitor(ILogger<SessionMonitor> log, ConfigSt
     /// The chat's title: what the user named it, else the title Claude Code wrote (a derived name in the status file is
     /// only a placeholder such as "develop-int-61"). Null when there is none yet, or it is just the folder name.
     /// </summary>
-    private static string? ClaudeTitle(string home, JsonElement status, string cwd, string name, string project)
+    private static string? ClaudeTitle(string claudeDir, JsonElement status, string cwd, string name, string project)
     {
         var fromName = Str(status, "nameSource") != "derived" && Str(status, "name") is not null;
-        var title = CleanTitle(fromName ? name : Str(status, "sessionId") is { Length: > 0 } id ? ReadClaudeTitle(home, cwd, id) : null);
+        var title = CleanTitle(fromName ? name : Str(status, "sessionId") is { Length: > 0 } id ? ReadClaudeTitle(claudeDir, cwd, id) : null);
         return title is null || title == project ? null : title;
     }
 

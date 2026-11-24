@@ -97,6 +97,28 @@ public sealed class SessionDetailsTests : IDisposable
     }
 
     [Fact]
+    public void ExtraClaudeConfigFoldersShowTheirSessionsAndRememberWhereTheyRun()
+    {
+        var work = Path.Combine(_root, "claude-work");
+        Directory.CreateDirectory(Path.Combine(work, "sessions"));
+        File.WriteAllText(Path.Combine(work, "sessions", "4455.json"),
+            JsonSerializer.Serialize(new { pid = 4455, sessionId = "abcdef12-work", cwd = "/work/api", status = "busy" }));
+        var transcript = Path.Combine(work, "projects", "-work-api", "abcdef12-work.jsonl");
+        Directory.CreateDirectory(Path.GetDirectoryName(transcript)!);
+        File.WriteAllText(transcript, "");
+        ClaudeCredentialDir[] dirs = [new() { Label = "work", Dir = work }, new() { Label = "again", Dir = work + "/" }];
+
+        var s = Assert.Single(_monitor.ReadExtraClaude(dirs, pid => pid == 4455));
+        Assert.Equal("claude:abcdef12-work", s.Id);
+        Assert.Equal("api", s.Project);
+        Assert.Equal(work, _monitor.ConversationClaudeDir(s.Id));
+        Assert.Equal(transcript, ClaudeTranscript.FindFile("abcdef12-work", claudeDir: _monitor.ConversationClaudeDir(s.Id)));
+
+        Assert.Empty(_monitor.ReadExtraClaude([], pid => true));
+        Assert.Null(_monitor.ConversationClaudeDir(s.Id));
+    }
+
+    [Fact]
     public void Claude_ClaudeProbeAndCodexBar_AreIgnored()
     {
         var claudeDir = Path.Combine(_root, ".claude", "sessions");
