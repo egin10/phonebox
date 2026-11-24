@@ -181,6 +181,7 @@ table.items td.val { font-family: Consolas, monospace; font-size: 12px; max-widt
 .console-row textarea, .console-row .console-dial { grid-column: 1 / 3; }
 .console-row textarea { font-family: ui-monospace, Consolas, monospace; }
 .console-dial { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.cdir-row { display: grid; grid-template-columns: 160px minmax(0, 1fr) auto; gap: 8px; align-items: center; margin-bottom: 8px; }
 .cal-row input[type=color] { width: 44px; height: 34px; padding: 2px; }
 @media (max-width: 700px) { .cal-row { grid-template-columns: 1fr 44px auto; } .feed-row { grid-template-columns: 1fr 1fr auto; } .cam-row { grid-template-columns: 1fr 80px 80px auto; } .cal-row .cal-url { grid-column: 1 / -1; grid-row: 2; } }
 
@@ -849,8 +850,9 @@ nav a.on::before { color: var(--accent); }
         <div class="row" style="margin-bottom:8px"><label class="switch"><input type="checkbox" data-bind="claude.phoneApprovals"><span></span></label> <span data-i18n="s.claude.askOnPhone">Ask on the phone</span></div>
         <label class="check"><input type="checkbox" data-bind="claude.shareSessionTitles"> <span data-i18n="s.claude.shareSessionTitles">Show Claude Code chat titles on the phone (Claude Code often draws them from your first prompt)</span></label>
         <label class="check"><input type="checkbox" data-bind="claude.watchWsl"> <span data-i18n="s.claude.watchWsl">Also watch Claude Code in WSL: its sessions, and its sign-in for the quota when Windows has none (a stopped distro is never started for this)</span></label>
-        <label for="claudeExtraDirs" style="display:block;margin:10px 0 4px" data-i18n="s.claude.extraDirs">Other Claude Code accounts for the quota: one per line, label = folder (the folder used as CLAUDE_CONFIG_DIR). Only the label reaches the phone.</label>
-        <textarea id="claudeExtraDirs" data-bind="claude.extraCredentialDirs" data-type="claudeDirs" rows="3" spellcheck="false" placeholder="work = ~/.claude-work" style="width:100%;font-family:monospace"></textarea>
+        <p class="hint" style="margin:10px 0 6px" data-i18n="s.claude.extraDirs">Other Claude Code accounts for the quota: a label and the folder used as CLAUDE_CONFIG_DIR. Only the label reaches the phone.</p>
+        <div id="claudeDirList"></div>
+        <button class="btn sm" id="claudeDirAdd" data-i18n="s.claude.extraDirsAdd">＋ Add an account</button>
         <label class="check"><input type="checkbox" data-bind="claude.onlyWhenAway"> <span data-i18n="s.claude.onlyWhenAway">Only when I am away from the PC (no keyboard or mouse for a minute)</span></label>
         <label class="check"><input type="checkbox" data-bind="claude.shareConversation"> <span data-i18n="s.claude.shareConversation">Show the conversation on the phone (tap a Claude Code session to see its recent messages and steps; these are your prompts and Claude's replies, sent only to your phone)</span></label>
         <div class="row" style="margin:14px 0 8px"><b style="min-width:92px" data-i18n="s.approvals.cursor">Cursor</b><button class="btn" id="cursorHookBtn" data-i18n="s.claude.installHook">Install hook</button><span class="hint" id="cursorHookState"></span></div>
@@ -2717,6 +2719,20 @@ $('cameraAdd').onclick = () => {
   cfg.cameras.sources.push({ id: cameraId(), name: '', url: '', transport: 'tcp', fps: 5 });
   renderCameras(); changed();
 };
+// Extra Claude Code accounts: blank rows are dropped by the agent when saving
+function renderClaudeDirs() {
+  const dirs = cfg.claude.extraCredentialDirs ??= [];
+  $('claudeDirList').replaceChildren(...dirs.map((d, i) => h('div', { class: 'cdir-row' },
+    h('input', { type: 'text', value: d.label || '', placeholder: 'work', maxlength: '40', oninput: (e) => { d.label = e.target.value; changed(); } }),
+    h('input', { type: 'text', value: d.dir || '', placeholder: '~/.claude-work', spellcheck: 'false', oninput: (e) => { d.dir = e.target.value.trim(); changed(); } }),
+    h('button', { class: 'btn sm danger', onclick: () => { dirs.splice(i, 1); renderClaudeDirs(); changed(); } }, t('s.js.remove')))));
+  $('claudeDirAdd').hidden = dirs.length >= 10;
+}
+$('claudeDirAdd').onclick = () => {
+  cfg.claude.extraCredentialDirs.push({ label: '', dir: '' });
+  renderClaudeDirs(); changed();
+  $('claudeDirList').querySelector('.cdir-row:last-child input')?.focus();
+};
 $('calAdd').onclick = () => {
   cfg.calendars ??= [];
   cfg.calendars.push({ name: '', url: '', color: CAL_COLORS[cfg.calendars.length % CAL_COLORS.length] });
@@ -3687,12 +3703,9 @@ function bindForm() {
     const v = getPath(cfg, p);
     if (el.type === 'checkbox') el.checked = !!v;
     else if (type === 'hour12') el.value = v === true || v === 'true' ? 'true' : v === 'auto' ? 'auto' : 'false';
-    else if (type === 'claudeDirs') el.value = (v || []).map((d) => `${d.label} = ${d.dir}`).join('\n');
     else el.value = v ?? '';
     el.oninput = el.onchange = () => {
       let val = el.type === 'checkbox' ? el.checked : el.value;
-      if (type === 'claudeDirs') val = val.split('\n').map((l) => l.split('=')).filter((x) => x.length >= 2)
-        .map(([label, ...dir]) => ({ label: label.trim(), dir: dir.join('=').trim() })).filter((d) => d.label && d.dir);
       if (type === 'num') val = parseFloat(val);
       if (type === 'int') val = parseInt(val || '0', 10);
       if (type === 'hour12') val = val === 'true' ? true : val === 'auto' ? 'auto' : false;
@@ -3706,6 +3719,7 @@ function bindForm() {
     };
   });
   bindCodexBar();
+  renderClaudeDirs();
   renderPhotoSource();
   $('nbv').textContent = Math.round(cfg.night.brightness * 100) + '%';
 }
