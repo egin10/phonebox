@@ -32,6 +32,16 @@ public class ConfigTests
     }
 
     [Fact]
+    public void ExtraClaudeCredentialDirsDropBlankAndRepeatedEntries()
+    {
+        var c = Load("""{"claude":{"extraCredentialDirs":[{"label":" work ","dir":" ~/.claude-work "},{"label":"","dir":"/x"},{"label":"y","dir":""},{"label":"again","dir":"~/.claude-work"},null]}}""");
+        var d = Assert.Single(c.Claude.ExtraCredentialDirs);
+        Assert.Equal("work", d.Label);
+        Assert.Equal("~/.claude-work", d.Dir);
+        Assert.Empty(Load("{}").Claude.ExtraCredentialDirs);
+    }
+
+    [Fact]
     public void EmptyConfigGetsTheDefaultPagesAndFreshTokens()
     {
         var c = Load("{}");

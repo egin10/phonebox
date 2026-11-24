@@ -218,7 +218,7 @@ public sealed partial class QuotaMonitor(ConfigStore config, ILogger<QuotaMonito
             .Where(p => p.Id is not ("claude" or "codex" or "antigravity"))
             .Select(p => CodexBar.Select(null, p, now))
             .OfType<QuotaProvider>();
-        return core.Concat(extra).Select(p => Rolled(p, now)).ToList();
+        return core.Concat(_extraClaudeView).Concat(extra).Select(p => Rolled(p, now)).ToList();
     }
 
     /// <summary>A window whose reset time has passed started over: the last reading (kept while the tool is not used) no longer applies.</summary>
@@ -428,7 +428,11 @@ public sealed partial class QuotaMonitor(ConfigStore config, ILogger<QuotaMonito
                 _nextAntigravity = Environment.TickCount64 + (ok ? 60_000 : 30_000);
             }
 
-            try { await ClaudeTickAsync(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), ct); }
+            try
+            {
+                await ClaudeTickAsync(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), ct);
+                await ExtraClaudeTickAsync(config?.Get().Claude.ExtraCredentialDirs ?? [], DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), ct);
+            }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
             catch (Exception ex) { log.LogWarning("claude quota: {Msg}", ex.Message); } // never end the loop for Codex and Antigravity
             // Zero when the CodexBar deadline has already passed (do not sleep another 30 s); otherwise min(30 s, remaining).
@@ -604,6 +608,43 @@ public sealed partial class QuotaMonitor(ConfigStore config, ILogger<QuotaMonito
         }
         _claudeNextAt = next;
         SaveClaudeSchedule(new ClaudeSchedule(next, _claudeFailures, error, refused, refusedAt));
+    }
+
+    // ------------------------------------------------------------------ Extra Claude accounts
+    // Each extra Claude Code config folder gets a reader of its own (its own token, schedule, back-off and cache), so
+    // one account that is expired or rate limited never holds up or stands in for another.
+
+    private readonly Dictionary<string, QuotaMonitor> _extraClaude = [];
+    private volatile IReadOnlyList<QuotaProvider> _extraClaudeView = [];
+
+    internal async Task ExtraClaudeTickAsync(IReadOnlyList<ClaudeCredentialDir> dirs, long nowMs, CancellationToken ct)
+    {
+        var view = new List<QuotaProvider>();
+        var keep = new HashSet<string>();
+        foreach (var d in dirs)
+        {
+            var dir = d.Dir.StartsWith('~') ? Home + d.Dir[1..] : d.Dir;
+            keep.Add(dir);
+            if (!_extraClaude.TryGetValue(dir, out var m))
+            {
+                // the cache file is named by a hash so the folder path itself is never written next to the readings
+                _extraClaude[dir] = m = new QuotaMonitor(log)
+                {
+                    CredentialsPath = Path.Combine(dir, ".credentials.json"),
+                    ClaudeCachePath = Path.Combine(Path.GetDirectoryName(ClaudeCachePath)!, $"claude-quota-{Fingerprint(dir)}.json"),
+                    HttpHandler = HttpHandler,
+                };
+                m.LoadClaudeCache(nowMs);
+            }
+            try { await m.ClaudeTickAsync(nowMs, ct); }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (Exception ex) { log.LogWarning("claude quota ({Label}): {Msg}", d.Label, ex.Message); }
+            // a folder without a credentials file still gets its card, so a typo in the path is visible
+            var p = m._claude ?? new QuotaProvider("claude", "Claude", "", [], null, null, "No Claude Code sign-in in this folder");
+            view.Add(p with { Name = "Claude · " + d.Label });
+        }
+        foreach (var gone in _extraClaude.Keys.Where(k => !keep.Contains(k)).ToList()) _extraClaude.Remove(gone);
+        _extraClaudeView = view;
     }
 
     private const string RefusedMessage = "Anthropic did not accept the sign-in; it will refresh when Claude Code runs";

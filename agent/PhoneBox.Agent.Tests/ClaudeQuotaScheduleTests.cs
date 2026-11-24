@@ -44,6 +44,32 @@ public sealed class ClaudeQuotaScheduleTests : IDisposable
     private static QuotaProvider Claude(QuotaMonitor agent) => Assert.Single(agent.Snapshot(), p => p.Id == "claude");
 
     [Fact]
+    public async Task ExtraCredentialDirsGetACardEachAndAMissingOneSaysSo()
+    {
+        var work = Directory.CreateDirectory(Path.Combine(_dir, "work")).FullName;
+        File.WriteAllText(Path.Combine(work, ".credentials.json"), SignInJson("token-work", _t0 + 3_600_000));
+        _api.Respond(HttpStatusCode.OK, Usage);
+        var agent = Agent();
+        ClaudeCredentialDir[] dirs =
+        [
+            new() { Label = "work", Dir = work },
+            new() { Label = "typo", Dir = Path.Combine(_dir, "missing") },
+        ];
+
+        await agent.ExtraClaudeTickAsync(dirs, _t0, default);
+        await agent.ExtraClaudeTickAsync(dirs, _t0 + Minute, default);
+
+        Assert.Equal(1, _api.Calls); // each account keeps its own 3-minute schedule
+        var cards = agent.Snapshot().Where(p => p.Id == "claude").ToList();
+        Assert.Equal(42, Assert.Single(cards, p => p.Name == "Claude · work").Limits.Single().Percent);
+        Assert.NotNull(Assert.Single(cards, p => p.Name == "Claude · typo").Error);
+        Assert.DoesNotContain(cards, p => p.Name == "Claude"); // no default sign-in here: no default card
+
+        await agent.ExtraClaudeTickAsync([], _t0 + 2 * Minute, default);
+        Assert.DoesNotContain(agent.Snapshot(), p => p.Name.StartsWith("Claude · "));
+    }
+
+    [Fact]
     public async Task AFreshReadingIsNotFetchedAgainWhenTheAgentRestarts()
     {
         SignIn("token-1", _t0 + 3_600_000);
