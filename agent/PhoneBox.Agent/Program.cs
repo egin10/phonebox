@@ -951,7 +951,7 @@ app.MapGet("/api/work/conversation", (string id, ConfigStore cfg, SessionMonitor
 {
     // a session inside WSL keeps its chat file in the distro's home; a distro that stopped is not read (that would start it)
     var home = sessions.ConversationHome(id, out var usable);
-    return Results.Json(ClaudeTranscript.ForPhone(cfg.Get().Claude.ShareConversation, usable ? sessions.Snapshot() : [], id, home));
+    return Results.Json(ClaudeTranscript.ForPhone(cfg.Get().Claude.ShareConversation, usable ? sessions.Snapshot() : [], id, home, sessions.ConversationClaudeDir(id)));
 });
 
 // Codex uses the same PermissionRequest decision contract, through ~/.codex/hooks.json.
