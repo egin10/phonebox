@@ -785,11 +785,14 @@ public sealed partial class ConfigStore(string path)
         if (c.Ping.Host.Length > 253 || c.Ping.Host.Any(ch => ch <= ' ' || ch > '~')) c.Ping.Host = PingMonitor.DefaultHost;
         c.Claude ??= new();
         c.Claude.TimeoutSec = Math.Clamp(c.Claude.TimeoutSec, 10, 3600);
+        // only absolute folders (or ~/…), each once, and never ~/.claude itself: it is read already
+        static string Key(ClaudeCredentialDir d) => System.IO.Path.TrimEndingDirectorySeparator(d.FullPath());
+        var defaultClaude = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".claude");
         c.Claude.ExtraCredentialDirs = (c.Claude.ExtraCredentialDirs ?? [])
             .OfType<ClaudeCredentialDir>()
             .Select(d => new ClaudeCredentialDir { Label = d.Label?.Trim() ?? "", Dir = d.Dir?.Trim() ?? "" })
-            .Where(d => d.Label.Length is > 0 and <= 40 && d.Dir.Length > 0)
-            .DistinctBy(d => d.Dir).Take(10).ToArray();
+            .Where(d => d.Label.Length is > 0 and <= 40 && System.IO.Path.IsPathFullyQualified(d.FullPath()) && Key(d) != defaultClaude)
+            .DistinctBy(Key).Take(10).ToArray();
         c.Cursor ??= new();
         c.Antigravity ??= new();
         c.OpenCode ??= new();
