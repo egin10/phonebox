@@ -320,6 +320,15 @@ public sealed class ClaudeConfig
     /// <summary>Windows: also show the Claude Code sessions (and use the sign-in for the quota, when Windows has none)
     /// of the running WSL distros' default users. A stopped distro is never started for it (off by default).</summary>
     public bool WatchWsl { get; set; }
+    /// <summary>Other Claude Code config folders (CLAUDE_CONFIG_DIR) whose sign-ins get a quota card each, next to
+    /// ~/.claude. Read only, like the default one. Paths stay on this computer; the phone only sees the labels.</summary>
+    public ClaudeCredentialDir[] ExtraCredentialDirs { get; set; } = [];
+}
+
+public sealed class ClaudeCredentialDir
+{
+    public string Label { get; set; } = "";
+    public string Dir { get; set; } = "";
 }
 
 public sealed class CursorConfig
@@ -797,6 +806,11 @@ public sealed partial class ConfigStore(string path)
         if (c.Ping.Host.Length > 253 || c.Ping.Host.Any(ch => ch <= ' ' || ch > '~')) c.Ping.Host = PingMonitor.DefaultHost;
         c.Claude ??= new();
         c.Claude.TimeoutSec = Math.Clamp(c.Claude.TimeoutSec, 10, 3600);
+        c.Claude.ExtraCredentialDirs = (c.Claude.ExtraCredentialDirs ?? [])
+            .OfType<ClaudeCredentialDir>()
+            .Select(d => new ClaudeCredentialDir { Label = d.Label?.Trim() ?? "", Dir = d.Dir?.Trim() ?? "" })
+            .Where(d => d.Label.Length is > 0 and <= 40 && d.Dir.Length > 0)
+            .DistinctBy(d => d.Dir).Take(10).ToArray();
         c.Cursor ??= new();
         c.Antigravity ??= new();
         c.OpenCode ??= new();
