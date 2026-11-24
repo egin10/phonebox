@@ -172,7 +172,13 @@ public static class ClaudeHook
 
     private static bool IsPathChar(char c) => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or '.' or '/' or '~' or '%';
 
-    public static bool Installed() => Installed(SettingsPath);
+    /// <summary>Installed in ~/.claude and in every extra Claude Code config folder that exists.</summary>
+    public static bool Installed(IEnumerable<ClaudeCredentialDir>? extra = null) => SettingsPaths(extra).All(Installed);
+
+    /// <summary>~/.claude/settings.json and the settings.json of each extra config folder that exists.</summary>
+    internal static List<string> SettingsPaths(IEnumerable<ClaudeCredentialDir>? extra, string? defaultPath = null) =>
+        (extra ?? []).Select(d => d.FullPath()).Where(Directory.Exists).Select(d => Path.Combine(d, "settings.json"))
+            .Prepend(defaultPath ?? SettingsPath).Distinct().ToList();
 
     internal static bool Installed(string path)
         => Installed(path, Endpoint);
@@ -191,8 +197,9 @@ public static class ClaudeHook
     }
 
     /// <summary>Adds (or, with install = false, removes) the PhoneBox hook, keeping everything else and a backup.</summary>
-    public static string? Configure(bool install, int port, int timeoutSec) =>
-        Configure(install, port, timeoutSec, SettingsPath);
+    public static string? Configure(bool install, int port, int timeoutSec, IEnumerable<ClaudeCredentialDir>? extra = null) =>
+        // every file is tried, so one broken settings.json doesn't leave the others without the hook
+        SettingsPaths(extra).Select(p => Configure(install, port, timeoutSec, p)).ToList().FirstOrDefault(e => e is not null);
 
     internal static string? Configure(bool install, int port, int timeoutSec, string path)
         => Configure(install, port, timeoutSec, path, Endpoint);
