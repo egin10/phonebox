@@ -952,6 +952,8 @@ app.MapGet("/api/work/conversation", (string id, ConfigStore cfg, SessionMonitor
     // a session inside WSL keeps its chat file in the distro's home; a distro that stopped is not read (that would start it)
     var home = sessions.ConversationHome(id, out var usable);
     var (rows, claudeDir) = sessions.ConversationSource(id);
+    // a native extra-folder session is read from its own folder (ForPhone prefers claudeDir), so the WSL check doesn't apply
+    usable |= claudeDir is not null;
     return Results.Json(ClaudeTranscript.ForPhone(cfg.Get().Claude.ShareConversation, usable ? rows : [], id, home, claudeDir));
 });
 
