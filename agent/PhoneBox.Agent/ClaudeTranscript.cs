@@ -61,12 +61,16 @@ public static partial class ClaudeTranscript
     {
         if (!SessionIdPattern().IsMatch(sessionId)) return null;
         var projects = Path.Combine(claudeDir ?? Path.Combine(homeDir ?? Home, ".claude"), "projects");
-        if (!Directory.Exists(projects)) return null;
-        foreach (var dir in Directory.EnumerateDirectories(projects))
+        try
         {
-            var path = Path.Combine(dir, sessionId + ".jsonl");
-            if (File.Exists(path)) return path;
+            if (!Directory.Exists(projects)) return null;
+            foreach (var dir in Directory.EnumerateDirectories(projects))
+            {
+                var path = Path.Combine(dir, sessionId + ".jsonl");
+                if (File.Exists(path)) return path;
+            }
         }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { } // a folder it may not list: no conversation
         return null;
     }
 
