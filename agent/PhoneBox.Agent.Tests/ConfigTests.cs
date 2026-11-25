@@ -69,6 +69,18 @@ public class ConfigTests
     }
 
     [Fact]
+    public void AnExtraClaudeFolderThatCantBeMadeFullIsDroppedAndTheRestIsKept()
+    {
+        var c = Load(JsonSerializer.Serialize(new { claude = new { extraCredentialDirs = new[]
+        {
+            // throws in GetFullPath on every platform, like a path past the Windows length limit does there
+            new { label = "nul", dir = Path.Combine(Path.GetTempPath(), "a\0b") },
+            new { label = "work", dir = Path.Combine(Path.GetTempPath(), "claude-work") },
+        } } }));
+        Assert.Equal("work", Assert.Single(c.Claude.ExtraCredentialDirs).Label);
+    }
+
+    [Fact]
     public void EmptyConfigGetsTheDefaultPagesAndFreshTokens()
     {
         var c = Load("{}");

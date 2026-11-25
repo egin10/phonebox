@@ -336,6 +336,12 @@ public sealed class ClaudeCredentialDir
     /// <summary>One identity for the folder however it is spelled: the full path without a trailing separator, case
     /// folded where the file system ignores case. Its reader, schedule and cache follow it.</summary>
     public string Key() => KeyOf(FullPath());
+    /// <summary><see cref="Key"/>, or null for a path that can't be made full (a NUL, too long): that entry is dropped.</summary>
+    public string? TryKey()
+    {
+        try { return Key(); }
+        catch (Exception ex) when (ex is ArgumentException or PathTooLongException or NotSupportedException) { return null; }
+    }
     internal static string KeyOf(string path)
     {
         var p = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
@@ -823,9 +829,9 @@ public sealed partial class ConfigStore(string path)
         c.Claude.ExtraCredentialDirs = (c.Claude.ExtraCredentialDirs ?? [])
             .OfType<ClaudeCredentialDir>()
             .Select(d => new ClaudeCredentialDir { Label = d.Label?.Trim() ?? "", Dir = d.Dir?.Trim() ?? "" })
-            .Where(d => d.Label.Length is > 0 and <= ClaudeCredentialDir.MaxLabel && !d.Dir.Contains('\0')
-                && System.IO.Path.IsPathFullyQualified(d.FullPath()) && d.Key() != defaultClaude)
-            .DistinctBy(d => d.Key()).DistinctBy(d => d.Label, StringComparer.OrdinalIgnoreCase).Take(10).ToArray();
+            .Select(d => (d, key: d.Label.Length is > 0 and <= ClaudeCredentialDir.MaxLabel && System.IO.Path.IsPathFullyQualified(d.FullPath()) ? d.TryKey() : null))
+            .Where(x => x.key is not null && x.key != defaultClaude)
+            .DistinctBy(x => x.key).Select(x => x.d).DistinctBy(d => d.Label, StringComparer.OrdinalIgnoreCase).Take(10).ToArray();
         c.Cursor ??= new();
         c.Antigravity ??= new();
         c.OpenCode ??= new();
