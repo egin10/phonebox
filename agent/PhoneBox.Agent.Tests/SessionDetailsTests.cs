@@ -114,6 +114,10 @@ public sealed class SessionDetailsTests : IDisposable
         Assert.Equal(work, _monitor.ConversationClaudeDir(s.Id));
         Assert.Equal(transcript, ClaudeTranscript.FindFile("abcdef12-work", claudeDir: _monitor.ConversationClaudeDir(s.Id)));
 
+        // the same id already read from ~/.claude keeps that one source: no extra row, no extra folder for its conversation
+        Assert.Empty(_monitor.ReadExtraClaude(dirs, pid => pid == 4455, taken: ["claude:abcdef12-work"]));
+        Assert.Null(_monitor.ConversationClaudeDir(s.Id));
+
         Assert.Empty(_monitor.ReadExtraClaude([], pid => true));
         Assert.Null(_monitor.ConversationClaudeDir(s.Id));
     }

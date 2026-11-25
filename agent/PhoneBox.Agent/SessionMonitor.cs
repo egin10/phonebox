@@ -75,7 +75,7 @@ public sealed partial class SessionMonitor(ILogger<SessionMonitor> log, ConfigSt
         {
             var list = new List<AgentSession>();
             try { list.AddRange(ReadClaude(titles: ShareTitles)); } catch (Exception ex) { log.LogDebug("claude sessions: {Msg}", ex.Message); }
-            list.AddRange(ReadExtraClaude(config?.Get().Claude.ExtraCredentialDirs ?? []));
+            list.AddRange(ReadExtraClaude(config?.Get().Claude.ExtraCredentialDirs ?? [], taken: list.Select(s => s.Id).ToList()));
             try { list.AddRange(ReadCodex()); } catch (Exception ex) { log.LogDebug("codex sessions: {Msg}", ex.Message); }
             try { list.AddRange(ReadGrok()); } catch (Exception ex) { log.LogDebug("grok sessions: {Msg}", ex.Message); }
             // OpenCode sessions are off until Settings › General › "Show OpenCode sessions" is enabled; while off,
@@ -136,11 +136,13 @@ public sealed partial class SessionMonitor(ILogger<SessionMonitor> log, ConfigSt
     /// <summary>The extra Claude Code config folder a session runs from, or null for ~/.claude and WSL.</summary>
     public string? ConversationClaudeDir(string sessionId) => _extraDirs.TryGetValue(sessionId, out var dir) ? dir : null;
 
-    /// <summary>Claude Code sessions of the extra config folders (Settings › Claude Code › other accounts).</summary>
-    internal List<AgentSession> ReadExtraClaude(IReadOnlyList<ClaudeCredentialDir> extra, Func<int, bool>? isAlive = null)
+    /// <summary>Claude Code sessions of the extra config folders (Settings › Claude Code › other accounts). An id in
+    /// <paramref name="taken"/> (already read from ~/.claude) is left out, so its row and its conversation come from one folder.</summary>
+    internal List<AgentSession> ReadExtraClaude(IReadOnlyList<ClaudeCredentialDir> extra, Func<int, bool>? isAlive = null, IEnumerable<string>? taken = null)
     {
         var list = new List<AgentSession>();
         var dirs = new Dictionary<string, string>();
+        var seen = new HashSet<string>(taken ?? []);
         foreach (var d in extra)
         {
             var dir = d.FullPath();
@@ -148,8 +150,8 @@ public sealed partial class SessionMonitor(ILogger<SessionMonitor> log, ConfigSt
             {
                 foreach (var s in ReadClaude(isAlive: isAlive, titles: ShareTitles, configDir: dir))
                 {
-                    // a folder listed twice (once with ~, once spelled out) shows its sessions once
-                    if (dirs.ContainsKey(s.Id)) continue;
+                    // one source per id: a folder listed twice, or a session copied from another account, shows once
+                    if (!seen.Add(s.Id)) continue;
                     list.Add(s);
                     dirs[s.Id] = dir;
                 }
