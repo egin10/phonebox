@@ -945,7 +945,8 @@ app.MapGet("/api/claude/hook", (ConfigStore cfg) =>
 {
     // full paths are fine here: this endpoint answers the settings page on this computer only
     var targets = ClaudeHook.Targets(cfg.Get().Claude.ExtraCredentialDirs);
-    return Results.Json(new { installed = targets.Where(t => t.Exists).All(t => t.Installed), path = ClaudeHook.SettingsPath, paths = targets });
+    // installed while any file has it, so Remove stays reachable when another file couldn't be written
+    return Results.Json(new { installed = targets.Any(t => t.Installed), path = ClaudeHook.SettingsPath, paths = targets });
 });
 app.MapPost("/api/claude/hook", (ConfigStore cfg) => ClaudeHook.Configure(true, Port, cfg.Get().Claude.TimeoutSec, cfg.Get().Claude.ExtraCredentialDirs) is { } err ? Results.BadRequest(new { error = err }) : Results.Ok());
 app.MapDelete("/api/claude/hook", (ConfigStore cfg) => ClaudeHook.Configure(false, Port, cfg.Get().Claude.TimeoutSec, cfg.Get().Claude.ExtraCredentialDirs) is { } err ? Results.BadRequest(new { error = err }) : Results.Ok());

@@ -172,9 +172,6 @@ public static class ClaudeHook
 
     private static bool IsPathChar(char c) => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or '.' or '/' or '~' or '%';
 
-    /// <summary>Installed in ~/.claude and in every extra Claude Code config folder that exists.</summary>
-    public static bool Installed(IEnumerable<ClaudeCredentialDir>? extra = null) => SettingsPaths(extra).All(Installed);
-
     /// <summary>~/.claude/settings.json and the settings.json of each extra config folder that exists.</summary>
     internal static List<string> SettingsPaths(IEnumerable<ClaudeCredentialDir>? extra, string? defaultPath = null) =>
         Targets(extra, defaultPath).Where(t => t.Exists).Select(t => t.Path).ToList();

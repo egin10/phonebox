@@ -3926,6 +3926,8 @@ async function loadInfo() {
     // Cursor's hook can sit in several places (Windows and each running WSL distro): list the ones that have it
     cursorHook.path = (cursorHook.paths || []).filter((p) => p.installed).map((p) => p.path).join(', ');
     renderClaudeHookTargets(claudeHook.paths || []);
+    // with other accounts, "Installed in" names the files that have it, like Cursor's
+    if ((claudeHook.paths || []).length > 1) claudeHook.path = claudeHook.paths.filter((p) => p.installed).map((p) => p.path).join(', ');
     for (const [name, hk] of [['claude', claudeHook], ['codex', codexHook], ['cursor', cursorHook]]) {
       $(`${name}HookState`).textContent = hk.installed ? t('s.claude.installedIn', { path: hk.path }) : t('s.claude.notInstalled');
       const btn = $(`${name}HookBtn`);
