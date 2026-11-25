@@ -1772,7 +1772,7 @@ W.quotaring = {
   needs: ['quotas', 'tick'],
   create(box, { o }) {
     const prov = o.provider || 'claude', idx = Number(o.limit) || 0;
-    const st = Q_STYLE[prov.split('@')[0]] || { color: '#94a3b8', logo: '●' };
+    const st = Q_STYLE[String(prov).split('@')[0]] || { color: '#94a3b8', logo: '●' };
     box.style.setProperty('--q', st.color);
     const dial = dialEl(), label = h('div', 'g-label'), sub = h('div', 'g-sub');
     box.append(dial, label, sub);
