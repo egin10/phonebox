@@ -457,10 +457,10 @@ export const fmtHM = (d) => fmtClock(d.getHours(), d.getMinutes());
 export const fmtTime = (ms) => { const s = Math.max(0, Math.floor(ms / 1000)); return Math.floor(s / 60) + ':' + pad(s % 60); };
 export function fmtRate(bps) {
   if (bps == null) return ['—', ''];
-  if (bps >= 1e9) return [(bps / 1e9).toFixed(1), 'GB/s'];
-  if (bps >= 1e6) return [(bps / 1e6).toFixed(bps >= 1e8 ? 0 : 1), 'MB/s'];
-  if (bps >= 1e3) return [(bps / 1e3).toFixed(0), 'KB/s'];
-  return [Math.round(bps).toString(), 'B/s'];
+  if (bps >= 1e9) return [(bps / 1e9).toFixed(1), tp('GB/s')];
+  if (bps >= 1e6) return [(bps / 1e6).toFixed(bps >= 1e8 ? 0 : 1), tp('MB/s')];
+  if (bps >= 1e3) return [(bps / 1e3).toFixed(0), tp('KB/s')];
+  return [Math.round(bps).toString(), tp('B/s')];
 }
 export const rateStr = (b) => fmtRate(b).join(' ');
 export function fmtDur(ms) {
@@ -474,13 +474,13 @@ export function fmtDur(ms) {
 export function shortDur(ms) {
   const m = Math.max(0, Math.floor(ms / 60000));
   if (m < 1) return t('time.now');
-  if (m < 60) return m + 'm';
+  if (m < 60) return tpv('{m}m', { m });
   const hr = Math.floor(m / 60);
-  return hr < 24 ? `${hr}h ${m % 60}m` : `${Math.floor(hr / 24)}d`;
+  return hr < 24 ? tpv('{h}h {m}m', { h: hr, m: m % 60 }) : tpv('{d}d', { d: Math.floor(hr / 24) });
 }
 export const ago = (ts) => { const d = Date.now() - ts; return d < 60_000 ? t('time.justNow') : t('time.ago', { dur: shortDur(d) }); };
 export const r1 = (v) => (v == null ? '—' : (Math.round(v * 10) / 10).toString());
-export const fmtMem = (mb) => (mb >= 1024 ? (mb / 1024).toFixed(1) + ' GB' : Math.round(mb) + ' MB');
+export const fmtMem = (mb) => (mb >= 1024 ? (mb / 1024).toFixed(1) + ' ' + tp('GB') : Math.round(mb) + ' ' + tp('MB'));
 export const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 export const color = (c) => (c && c.startsWith('--') ? cssVar(c) : c);
 
@@ -570,15 +570,15 @@ export function gpuMem(g) {
   }
   return g.vramTotal ? { label: 'VRAM', used: g.vramUsed || 0, total: g.vramTotal } : null;
 }
-const memText = (m) => `${r1(m.used)} / ${Math.round(m.total)} GB`;
+const memText = (m) => `${r1(m.used)} / ${Math.round(m.total)} ${tp('GB')}`;
 /** Board power: watts when a sensor gives them, otherwise the share of the power limit Windows reports. */
-export const gpuPower = (g) => (g?.power != null ? `${Math.round(g.power)} W` : g?.powerPct != null ? tpv('{n}% power', { n: Math.round(g.powerPct) }) : null);
+export const gpuPower = (g) => (g?.power != null ? `${Math.round(g.power)} ${tp("W")}` : g?.powerPct != null ? tpv('{n}% power', { n: Math.round(g.powerPct) }) : null);
 export const netMax = () => Math.max(1, ...hist.down, ...hist.up) * 1.15;
 
 export const METRICS = {
   cpu: { label: 'CPU', name: 'Processor', color: '--cpu', unit: '%', max: () => 100, val: (s) => s.pc?.cpu,
     sub: (s) => {
-      const parts = [s.pc?.cpuTemp != null ? `${Math.round(s.pc.cpuTemp)}°C` : null, s.pc?.cpuPower != null ? `${Math.round(s.pc.cpuPower)} W` : null].filter(Boolean);
+      const parts = [s.pc?.cpuTemp != null ? `${Math.round(s.pc.cpuTemp)}°C` : null, s.pc?.cpuPower != null ? `${Math.round(s.pc.cpuPower)} ${tp("W")}` : null].filter(Boolean);
       return parts.length ? parts.join(' · ') : shortCpu(s.pc?.cpuName);
     }, title: (s) => s.pc?.cpuName },
   gpu: { label: 'GPU', name: 'Graphics', color: '--gpu', unit: '%', max: () => 100, val: (s) => gpuOf(s)?.util,
@@ -592,7 +592,7 @@ export const METRICS = {
       return shortGpu(g.name) || tp('Active');
     }, title: (s) => gpuOf(s)?.name },
   ram: { label: 'RAM', name: 'Memory', color: '--ram', unit: 'GB', max: (s) => s.pc?.ramTotalGb || 1, val: (s) => s.pc?.ramUsedGb, fmt: r1,
-    pct: (s) => (s.pc ? (s.pc.ramUsedGb / s.pc.ramTotalGb) * 100 : null), sub: (s) => (s.pc && s.pc.ramTotalGb ? `${r1(s.pc.ramUsedGb)} / ${Math.round(s.pc.ramTotalGb)} GB` : '') },
+    pct: (s) => (s.pc ? (s.pc.ramUsedGb / s.pc.ramTotalGb) * 100 : null), sub: (s) => (s.pc && s.pc.ramTotalGb ? `${r1(s.pc.ramUsedGb)} / ${Math.round(s.pc.ramTotalGb)} ${tp('GB')}` : '') },
   vram: { label: 'VRAM', name: 'Video memory', color: '--gpu', unit: '%', max: () => 100,
     val: (s) => { const m = gpuMem(gpuOf(s)); return m ? (m.used / m.total) * 100 : null; },
     sub: (s) => { const m = gpuMem(gpuOf(s)); return m ? memText(m) : tp('No GPU data'); } },
@@ -637,7 +637,7 @@ export const METRICS = {
 export function metricText(m, s) {
   const v = m.val(s);
   if (m.rate) return fmtRate(v);
-  const unit = (typeof m.unit === 'function' ? m.unit(s) : m.unit) || '';
+  const unit = tp((typeof m.unit === 'function' ? m.unit(s) : m.unit) || '');
   if (v == null) return ['—', unit];
   return [m.fmt ? m.fmt(v) : String(Math.round(v)), unit];
 }
