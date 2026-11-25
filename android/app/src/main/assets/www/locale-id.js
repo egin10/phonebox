@@ -505,7 +505,7 @@ window.PhoneBoxLocaleData = Object.assign(window.PhoneBoxLocaleData || {}, {
       "s.claude.timeoutReinstall": "Setiap hook memakai detik saat dipasang: setelah mengubahnya, hapus hook lalu pasang lagi.",
       "s.cursor.approvalsHint": "Hook Cursor berjalan sebelum setiap perintah shell dan setiap panggilan alat MCP dari agennya, termasuk yang akan dijalankannya sendiri. Selama ponsel terhubung, masing-masing menunggu Izinkan atau Tolak di sana; tanpa ponsel, atau tanpa jawaban, Cursor berjalan seperti biasa. Dengan \"Pantau juga Cursor di WSL\" aktif, hook juga dipasang di distro yang sedang berjalan (proyek yang dibuka dengan Remote - WSL menjalankan hook di sana).",
       "s.claude.watchWsl": "Pantau juga Claude Code di WSL: sesinya, dan login-nya untuk kuota saat Windows tidak punya (distro yang berhenti tidak pernah dijalankan untuk ini)",
-      "s.claude.extraDirs": "Akun Claude Code lain untuk kuota: label dan folder yang dipakai sebagai CLAUDE_CONFIG_DIR. Hanya label yang dikirim ke ponsel. Label adalah bagian dari id kartu: mengganti label mengubah id, jadi pilih ulang akunnya di widget yang memakainya.",
+      "s.claude.extraDirs": "Akun Claude Code lain untuk kuota dan sesi: label dan folder yang dipakai sebagai CLAUDE_CONFIG_DIR. Hanya label yang dikirim ke ponsel. Label adalah bagian dari id kartu: mengganti label mengubah id, jadi pilih ulang akunnya di widget yang memakainya.",
       "s.claude.extraDirsAdd": "＋ Tambah akun",
       "s.cursor.watchWsl": "Pantau juga Cursor di WSL (proyek yang dibuka dengan Remote - WSL; distro yang berhenti tidak pernah dijalankan untuk ini)",
       "s.display.wallpaper": "Gambar latar",
