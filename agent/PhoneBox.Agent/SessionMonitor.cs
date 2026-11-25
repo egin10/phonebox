@@ -28,7 +28,10 @@ public sealed partial class SessionMonitor(ILogger<SessionMonitor> log, ConfigSt
     private static readonly string Home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
     private readonly ConcurrentDictionary<string, string> _codexCwd = new();
     private readonly ConcurrentDictionary<string, (DateTime LastWrite, long Length, CodexDetails Details)> _codexDetails = new();
-    private volatile IReadOnlyList<AgentSession> _sessions = [];
+    // the rows and the extra Claude Code folder each was read from (session id -> folder), published together so a
+    // conversation is read from the folder that produced its row
+    private sealed record Published(IReadOnlyList<AgentSession> Sessions, IReadOnlyDictionary<string, string> ExtraDirs);
+    private volatile Published _pub = new([], new Dictionary<string, string>());
     private string? _discoveryRoot;
     private long _nextDiscovery;
     private string[] _candidateFiles = [];
@@ -47,9 +50,18 @@ public sealed partial class SessionMonitor(ILogger<SessionMonitor> log, ConfigSt
     /// also loses the title from its Name — the reader puts the short session id there when titles are off, and the
     /// next monitor refresh (about two seconds) does the same; until then this keeps the title off the phone.
     /// </summary>
-    public IReadOnlyList<AgentSession> Snapshot()
+    public IReadOnlyList<AgentSession> Snapshot() => Shown(_pub.Sessions);
+
+    /// <summary>The sessions (as <see cref="Snapshot"/>) and the extra Claude Code config folder <paramref name="sessionId"/>
+    /// runs from (null for ~/.claude and WSL), both from one published read.</summary>
+    public (IReadOnlyList<AgentSession> Sessions, string? ClaudeDir) ConversationSource(string sessionId)
     {
-        var all = _sessions;
+        var p = _pub;
+        return (Shown(p.Sessions), p.ExtraDirs.GetValueOrDefault(sessionId));
+    }
+
+    private IReadOnlyList<AgentSession> Shown(IReadOnlyList<AgentSession> all)
+    {
         if (!all.Any(s => s.Title is not null)) return all;
         var claude = ShareTitles;
         var opencode = config?.Get().OpenCode.ShareSessionTitles ?? false;
@@ -67,7 +79,7 @@ public sealed partial class SessionMonitor(ILogger<SessionMonitor> log, ConfigSt
     private bool ShareTitles => config?.Get().Claude.ShareSessionTitles ?? false;
 
     /// <summary>For tests: what the monitor has read, without running its loop.</summary>
-    internal IReadOnlyList<AgentSession> Sessions { set => _sessions = value; }
+    internal IReadOnlyList<AgentSession> Sessions { set => _pub = _pub with { Sessions = value }; }
 
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
@@ -75,7 +87,8 @@ public sealed partial class SessionMonitor(ILogger<SessionMonitor> log, ConfigSt
         {
             var list = new List<AgentSession>();
             try { list.AddRange(ReadClaude(titles: ShareTitles)); } catch (Exception ex) { log.LogDebug("claude sessions: {Msg}", ex.Message); }
-            list.AddRange(ReadExtraClaude(config?.Get().Claude.ExtraCredentialDirs ?? [], taken: list.Select(s => s.Id).ToList()));
+            var (extraRows, extraDirs) = ReadExtraClaude(config?.Get().Claude.ExtraCredentialDirs ?? [], taken: list.Select(s => s.Id).ToList());
+            list.AddRange(extraRows);
             try { list.AddRange(ReadCodex()); } catch (Exception ex) { log.LogDebug("codex sessions: {Msg}", ex.Message); }
             try { list.AddRange(ReadGrok()); } catch (Exception ex) { log.LogDebug("grok sessions: {Msg}", ex.Message); }
             // OpenCode sessions are off until Settings › General › "Show OpenCode sessions" is enabled; while off,
@@ -108,7 +121,7 @@ public sealed partial class SessionMonitor(ILogger<SessionMonitor> log, ConfigSt
             var cfg = config?.Get();
             try { list.AddRange(ReadWsl(cfg?.Claude.WatchWsl == true, cfg?.Cursor.Sessions == true && cfg.Cursor.WatchWsl)); }
             catch (Exception ex) { log.LogDebug("wsl sessions: {Msg}", ex.Message); }
-            _sessions = list;
+            _pub = new(list, extraDirs);
             ClaudeTranscript.Trim(list.Where(s => s.Tool == "claude").Select(s => s.Id["claude:".Length..]), config?.Get().Claude.ShareConversation ?? false);
             await Task.Delay(2000, ct);
         }
@@ -130,15 +143,9 @@ public sealed partial class SessionMonitor(ILogger<SessionMonitor> log, ConfigSt
     /// <summary>The home to read a session's conversation from: null for a native session, and for a WSL session only
     /// while its distro still runs (asked right before the read, so a distro that stopped since is not started by it).</summary>
     /// <param name="usable">False for a WSL session whose distro has stopped: nothing may be read for it.</param>
-    // the extra Claude Code config folder each session was read from, for its conversation (session id -> folder)
-    private volatile IReadOnlyDictionary<string, string> _extraDirs = new Dictionary<string, string>();
-
-    /// <summary>The extra Claude Code config folder a session runs from, or null for ~/.claude and WSL.</summary>
-    public string? ConversationClaudeDir(string sessionId) => _extraDirs.TryGetValue(sessionId, out var dir) ? dir : null;
-
     /// <summary>Claude Code sessions of the extra config folders (Settings › Claude Code › other accounts). An id in
-    /// <paramref name="taken"/> (already read from ~/.claude) is left out, so its row and its conversation come from one folder.</summary>
-    internal List<AgentSession> ReadExtraClaude(IReadOnlyList<ClaudeCredentialDir> extra, Func<int, bool>? isAlive = null, IEnumerable<string>? taken = null)
+    /// <paramref name="taken"/> (already read from ~/.claude) is left out, so its row and its conversation come from one folder. Also returns the folder each row was read from (session id -> folder).</summary>
+    internal (List<AgentSession> Rows, Dictionary<string, string> Dirs) ReadExtraClaude(IReadOnlyList<ClaudeCredentialDir> extra, Func<int, bool>? isAlive = null, IEnumerable<string>? taken = null)
     {
         var list = new List<AgentSession>();
         var dirs = new Dictionary<string, string>();
@@ -158,8 +165,7 @@ public sealed partial class SessionMonitor(ILogger<SessionMonitor> log, ConfigSt
             }
             catch (Exception ex) { log.LogDebug("claude sessions ({Label}): {Msg}", d.Label, ex.Message); }
         }
-        _extraDirs = dirs;
-        return list;
+        return (list, dirs);
     }
 
     public string? ConversationHome(string sessionId, out bool usable, Func<string, bool>? isRunning = null)
