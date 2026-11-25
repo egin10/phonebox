@@ -44,8 +44,28 @@ public class ConfigTests
     [Fact]
     public void ExtraClaudeLabelsAreUniqueAndShortBecauseTheyMakeTheCardId()
     {
-        var c = Load("""{"claude":{"extraCredentialDirs":[{"label":"Work","dir":"/a"},{"label":" work ","dir":"/b"},{"label":"a-label-longer-than-twenty","dir":"/c"},{"label":"home","dir":"/d"}]}}""");
+        string Dir(string name) => Path.Combine(Path.GetTempPath(), name); // fully qualified on every platform
+        var c = Load(JsonSerializer.Serialize(new { claude = new { extraCredentialDirs = new[]
+        {
+            new { label = "Work", dir = Dir("a") }, new { label = " work ", dir = Dir("b") },
+            new { label = "a-label-longer-than-twenty", dir = Dir("c") }, new { label = "home", dir = Dir("d") },
+        } } }));
         Assert.Equal(["Work", "home"], c.Claude.ExtraCredentialDirs.Select(d => d.Label));
+    }
+
+    [Fact]
+    public void ExtraClaudeFoldersAreComparedByTheirFullPath()
+    {
+        var work = Path.Combine(Path.GetTempPath(), "claude-work");
+        var c = Load(JsonSerializer.Serialize(new { claude = new { extraCredentialDirs = new[]
+        {
+            new { label = "work", dir = work },
+            new { label = "dots", dir = Path.Combine(Path.GetTempPath(), "x", "..", "claude-work") },
+            new { label = "here", dir = Path.Combine(Path.GetTempPath(), ".", "claude-work") + Path.DirectorySeparatorChar },
+            new { label = "home", dir = "~/x/../.claude" },
+            new { label = "dot", dir = "~/./.claude" },
+        } } }));
+        Assert.Equal("work", Assert.Single(c.Claude.ExtraCredentialDirs).Label);
     }
 
     [Fact]

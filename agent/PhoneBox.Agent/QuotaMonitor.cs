@@ -648,8 +648,10 @@ public sealed partial class QuotaMonitor(ConfigStore config, ILogger<QuotaMonito
     {
         var view = new List<QuotaProvider>();
         var keep = new HashSet<string>();
+        var clock = System.Diagnostics.Stopwatch.StartNew(); // accounts are read one after another: each gets its own start time
         foreach (var d in dirs)
         {
+            var at = nowMs + clock.ElapsedMilliseconds;
             var dir = d.FullPath();
             keep.Add(dir);
             if (!_extraClaude.TryGetValue(dir, out var m))
@@ -661,9 +663,9 @@ public sealed partial class QuotaMonitor(ConfigStore config, ILogger<QuotaMonito
                     ClaudeCachePath = Path.Combine(Path.GetDirectoryName(ClaudeCachePath)!, $"claude-quota-{Fingerprint(dir)}.json"),
                     HttpHandler = HttpHandler,
                 };
-                m.LoadClaudeCache(nowMs);
+                m.LoadClaudeCache(at);
             }
-            try { await m.ClaudeTickAsync(nowMs, ct); }
+            try { await m.ClaudeTickAsync(at, ct); }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
             catch (Exception ex) { log.LogWarning("claude quota ({Label}): {Msg}", d.Label, ex.Message); }
             // a folder without a credentials file still gets its card, so a typo in the path is visible
