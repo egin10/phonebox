@@ -60,13 +60,33 @@ public sealed class ClaudeQuotaScheduleTests : IDisposable
         await agent.ExtraClaudeTickAsync(dirs, _t0 + Minute, default);
 
         Assert.Equal(1, _api.Calls); // each account keeps its own 3-minute schedule
-        var cards = agent.Snapshot().Where(p => p.Id == "claude").ToList();
-        Assert.Equal(42, Assert.Single(cards, p => p.Name == "Claude · work").Limits.Single().Percent);
-        Assert.NotNull(Assert.Single(cards, p => p.Name == "Claude · typo").Error);
-        Assert.DoesNotContain(cards, p => p.Name == "Claude"); // no default sign-in here: no default card
+        var cards = agent.Snapshot();
+        Assert.Equal(42, Assert.Single(cards, p => p.Id == "claude@work" && p.Name == "Claude · work").Limits.Single().Percent);
+        Assert.NotNull(Assert.Single(cards, p => p.Id == "claude@typo").Error);
+        Assert.DoesNotContain(cards, p => p.Id == "claude"); // no default sign-in here: no default card
 
         await agent.ExtraClaudeTickAsync([], _t0 + 2 * Minute, default);
-        Assert.DoesNotContain(agent.Snapshot(), p => p.Name.StartsWith("Claude · "));
+        Assert.DoesNotContain(agent.Snapshot(), p => p.Id.StartsWith("claude@"));
+    }
+
+    [Fact]
+    public async Task AnExpiredOrMalformedExtraSignInShowsOnItsOwnCardAndIsNeverSent()
+    {
+        var old = Directory.CreateDirectory(Path.Combine(_dir, "old")).FullName;
+        File.WriteAllText(Path.Combine(old, ".credentials.json"), SignInJson("token-old", _t0 - 3_600_000));
+        var bad = Directory.CreateDirectory(Path.Combine(_dir, "bad")).FullName;
+        File.WriteAllText(Path.Combine(bad, ".credentials.json"), """{"something":"else"}""");
+        SignIn("token-default", _t0 + 3_600_000); // a good default sign-in must not stand in for either
+        _api.Respond(HttpStatusCode.OK, Usage);
+        var agent = Agent();
+
+        await agent.ExtraClaudeTickAsync([new() { Label = "old", Dir = old }, new() { Label = "bad", Dir = bad }], _t0, default);
+
+        Assert.Equal(0, _api.Calls);
+        var cards = agent.Snapshot();
+        Assert.Contains("expired", Assert.Single(cards, p => p.Id == "claude@old").Error);
+        Assert.NotNull(Assert.Single(cards, p => p.Id == "claude@bad").Error);
+        Assert.All(cards.Where(p => p.Id.StartsWith("claude@")), p => Assert.Empty(p.Limits));
     }
 
     [Fact]

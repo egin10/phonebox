@@ -755,6 +755,8 @@ export function phoneBattery() {
 }
 
 export function quotaProviders() { return D.quotas?.providers || []; }
+// An extra account's card is `claude@<label>`: a widget set to `claude` shows every Claude account, or it names one.
+export const quotaWanted = (want, id) => want.includes(id) || want.includes(String(id).split('@')[0]);
 
 export function renderStatus(el, o = {}) {
   const via = transport();
@@ -765,7 +767,7 @@ export function renderStatus(el, o = {}) {
   for (const p of quotaProviders()) {
     const l = p.limits?.[0];
     // Clocks saved before the Providers option have none: show every provider like before.
-    if (!l || (o.providers != null && !o.providers.includes(p.id))) continue;
+    if (!l || (o.providers != null && !quotaWanted(o.providers, p.id))) continue;
     const s = h('span', 'qm', h('span', 'sep', '·'), p.name + ' ', h('b', null, Math.round(l.percent) + '%'));
     if (l.percent >= 95) s.style.color = '#f87171'; else if (l.percent >= 80) s.style.color = '#fbbf24';
     kids.push(s);

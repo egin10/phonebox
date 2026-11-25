@@ -42,6 +42,13 @@ public class ConfigTests
     }
 
     [Fact]
+    public void ExtraClaudeLabelsAreUniqueAndShortBecauseTheyMakeTheCardId()
+    {
+        var c = Load("""{"claude":{"extraCredentialDirs":[{"label":"Work","dir":"/a"},{"label":" work ","dir":"/b"},{"label":"a-label-longer-than-twenty","dir":"/c"},{"label":"home","dir":"/d"}]}}""");
+        Assert.Equal(["Work", "home"], c.Claude.ExtraCredentialDirs.Select(d => d.Label));
+    }
+
+    [Fact]
     public void EmptyConfigGetsTheDefaultPagesAndFreshTokens()
     {
         var c = Load("{}");

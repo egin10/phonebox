@@ -650,7 +650,7 @@ public sealed partial class QuotaMonitor(ConfigStore config, ILogger<QuotaMonito
         var keep = new HashSet<string>();
         foreach (var d in dirs)
         {
-            var dir = d.Dir.StartsWith('~') ? Home + d.Dir[1..] : d.Dir;
+            var dir = d.FullPath();
             keep.Add(dir);
             if (!_extraClaude.TryGetValue(dir, out var m))
             {
@@ -668,7 +668,7 @@ public sealed partial class QuotaMonitor(ConfigStore config, ILogger<QuotaMonito
             catch (Exception ex) { log.LogWarning("claude quota ({Label}): {Msg}", d.Label, ex.Message); }
             // a folder without a credentials file still gets its card, so a typo in the path is visible
             var p = m._claude ?? new QuotaProvider("claude", "Claude", "", [], null, null, "No Claude Code sign-in in this folder");
-            view.Add(p with { Name = "Claude · " + d.Label });
+            view.Add(p with { Id = "claude@" + d.Label, Name = "Claude · " + d.Label });
         }
         foreach (var gone in _extraClaude.Keys.Where(k => !keep.Contains(k)).ToList()) _extraClaude.Remove(gone);
         _extraClaudeView = view;

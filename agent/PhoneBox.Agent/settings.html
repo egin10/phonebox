@@ -859,7 +859,7 @@ nav a.on::before { color: var(--accent); }
         <div class="row" style="margin-bottom:8px"><label class="switch"><input type="checkbox" data-bind="claude.phoneApprovals"><span></span></label> <span data-i18n="s.claude.askOnPhone">Ask on the phone</span></div>
         <label class="check"><input type="checkbox" data-bind="claude.shareSessionTitles"> <span data-i18n="s.claude.shareSessionTitles">Show Claude Code chat titles on the phone (Claude Code often draws them from your first prompt)</span></label>
         <label class="check"><input type="checkbox" data-bind="claude.watchWsl"> <span data-i18n="s.claude.watchWsl">Also watch Claude Code in WSL: its sessions, and its sign-in for the quota when Windows has none (a stopped distro is never started for this)</span></label>
-        <p class="hint" style="margin:10px 0 6px" data-i18n="s.claude.extraDirs">Other Claude Code accounts for the quota: a label and the folder used as CLAUDE_CONFIG_DIR. Only the label reaches the phone.</p>
+        <p class="hint" style="margin:10px 0 6px" data-i18n="s.claude.extraDirs">Other Claude Code accounts for the quota: a label and the folder used as CLAUDE_CONFIG_DIR. Only the label reaches the phone. The label is part of the card id: renaming it changes the id, so pick the account again in widgets set to it.</p>
         <div id="claudeDirList"></div>
         <button class="btn sm" id="claudeDirAdd" data-i18n="s.claude.extraDirsAdd">＋ Add an account</button>
         <label class="check"><input type="checkbox" data-bind="claude.onlyWhenAway"> <span data-i18n="s.claude.onlyWhenAway">Only when I am away from the PC (no keyboard or mouse for a minute)</span></label>
@@ -2807,7 +2807,7 @@ $('cameraAdd').onclick = () => {
 function renderClaudeDirs() {
   const dirs = cfg.claude.extraCredentialDirs ??= [];
   $('claudeDirList').replaceChildren(...dirs.map((d, i) => h('div', { class: 'cdir-row' },
-    h('input', { type: 'text', value: d.label || '', placeholder: 'work', maxlength: '40', oninput: (e) => { d.label = e.target.value; changed(); } }),
+    h('input', { type: 'text', value: d.label || '', placeholder: 'work', maxlength: '20', oninput: (e) => { d.label = e.target.value; changed(); } }),
     h('input', { type: 'text', value: d.dir || '', placeholder: '~/.claude-work', spellcheck: 'false', oninput: (e) => { d.dir = e.target.value.trim(); changed(); } }),
     h('button', { class: 'btn sm danger', onclick: () => { dirs.splice(i, 1); renderClaudeDirs(); changed(); } }, t('s.js.remove')))));
   $('claudeDirAdd').hidden = dirs.length >= 10;

@@ -327,8 +327,12 @@ public sealed class ClaudeConfig
 
 public sealed class ClaudeCredentialDir
 {
+    /// <summary>Longest label kept: it is part of the card id (claude@label) that widgets are set to.</summary>
+    public const int MaxLabel = 20;
     public string Label { get; set; } = "";
     public string Dir { get; set; } = "";
+    /// <summary>The folder with a leading ~ turned into the home folder.</summary>
+    public string FullPath() => Dir.StartsWith('~') ? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + Dir[1..] : Dir;
 }
 
 public sealed class CursorConfig
@@ -812,8 +816,8 @@ public sealed partial class ConfigStore(string path)
         c.Claude.ExtraCredentialDirs = (c.Claude.ExtraCredentialDirs ?? [])
             .OfType<ClaudeCredentialDir>()
             .Select(d => new ClaudeCredentialDir { Label = d.Label?.Trim() ?? "", Dir = d.Dir?.Trim() ?? "" })
-            .Where(d => d.Label.Length is > 0 and <= 40 && System.IO.Path.IsPathFullyQualified(d.FullPath()) && Key(d) != defaultClaude)
-            .DistinctBy(Key).Take(10).ToArray();
+            .Where(d => d.Label.Length is > 0 and <= ClaudeCredentialDir.MaxLabel && System.IO.Path.IsPathFullyQualified(d.FullPath()) && Key(d) != defaultClaude)
+            .DistinctBy(Key).DistinctBy(d => d.Label, StringComparer.OrdinalIgnoreCase).Take(10).ToArray();
         c.Cursor ??= new();
         c.Antigravity ??= new();
         c.OpenCode ??= new();
