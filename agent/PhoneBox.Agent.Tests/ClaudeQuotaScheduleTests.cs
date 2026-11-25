@@ -90,6 +90,41 @@ public sealed class ClaudeQuotaScheduleTests : IDisposable
     }
 
     [Fact]
+    public async Task AnUnreadableSignInFileShowsAnErrorAfterASecondReadAndKeepsTheLastReading()
+    {
+        SignIn("token-1", _t0 + 3_600_000);
+        _api.Respond(HttpStatusCode.OK, Usage);
+        var agent = Agent();
+        await agent.ClaudeTickAsync(_t0, default);
+
+        File.WriteAllText(Creds, """{"claudeAiOauth":{"accessToken":"tok""");
+        await agent.ClaudeTickAsync(_t0 + 3 * Minute, default);
+        Assert.Null(Claude(agent).Error); // once may be Claude Code rewriting the file
+        await agent.ClaudeTickAsync(_t0 + 6 * Minute, default);
+        Assert.Contains("can't be read", Claude(agent).Error);
+        Assert.Equal(42, Claude(agent).Limits.Single().Percent);
+        Assert.Equal(1, _api.Calls);
+
+        SignIn("token-1", _t0 + 3_600_000); // repaired: read again within a minute, and the check goes on
+        await agent.ClaudeTickAsync(_t0 + 7 * Minute, default);
+        Assert.Null(Claude(agent).Error);
+    }
+
+    [Fact]
+    public async Task AnExtraFolderSpelledAnotherWayKeepsItsSchedule()
+    {
+        var work = Directory.CreateDirectory(Path.Combine(_dir, "work")).FullName;
+        File.WriteAllText(Path.Combine(work, ".credentials.json"), SignInJson("token-work", _t0 + 3_600_000));
+        _api.Respond(HttpStatusCode.OK, Usage);
+        var agent = Agent();
+
+        await agent.ExtraClaudeTickAsync([new() { Label = "work", Dir = work }], _t0, default);
+        await agent.ExtraClaudeTickAsync([new() { Label = "work", Dir = Path.Combine(_dir, ".", "work") + Path.DirectorySeparatorChar }], _t0 + Minute, default);
+
+        Assert.Equal(1, _api.Calls);
+    }
+
+    [Fact]
     public async Task AFreshReadingIsNotFetchedAgainWhenTheAgentRestarts()
     {
         SignIn("token-1", _t0 + 3_600_000);

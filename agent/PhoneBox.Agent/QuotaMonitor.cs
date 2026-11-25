@@ -490,6 +490,7 @@ public sealed partial class QuotaMonitor(ConfigStore config, ILogger<QuotaMonito
     private long _claudeRefusedAt;
     private bool _claudeAwaitingToken;  // expired, missing or refused: only the sign-in is read until it changes
     private long _claudeCredsReadAt;
+    private int _claudeUnreadable;      // sign-in files in a row that were not valid JSON
 
     /// <summary>The shared schedule: when the next request may go out, and the message to show until then.</summary>
     /// <param name="Refused">Fingerprint (a hash prefix, not the token) of the token Anthropic refused, and when.</param>
@@ -570,8 +571,14 @@ public sealed partial class QuotaMonitor(ConfigStore config, ILogger<QuotaMonito
         }
         catch (JsonException)
         {
-            return; // read mid-write; the next pass reads the whole file
+            // read mid-write: the next pass reads the whole file. Twice in a row, the file itself is broken: say so on
+            // the card (keeping the last reading) and read it again every minute until it is repaired.
+            if (++_claudeUnreadable < 2) return;
+            _claude = Keep(_claude?.Plan ?? "Claude", "The Claude Code sign-in file can't be read");
+            _claudeAwaitingToken = true;
+            return;
         }
+        _claudeUnreadable = 0;
 
         var print = token.Length == 0 ? "" : Fingerprint(token);
         // A plan without a token is what the Claude Desktop app leaves in the file: it keeps its own sign-in to itself,
@@ -652,15 +659,16 @@ public sealed partial class QuotaMonitor(ConfigStore config, ILogger<QuotaMonito
         foreach (var d in dirs)
         {
             var at = nowMs + clock.ElapsedMilliseconds;
-            var dir = d.FullPath();
-            keep.Add(dir);
-            if (!_extraClaude.TryGetValue(dir, out var m))
+            // one reader, schedule and cache per folder however it is spelled, so an equivalent edit keeps a Retry-After
+            var key = d.Key();
+            keep.Add(key);
+            if (!_extraClaude.TryGetValue(key, out var m))
             {
                 // the cache file is named by a hash so the folder path itself is never written next to the readings
-                _extraClaude[dir] = m = new QuotaMonitor(log)
+                _extraClaude[key] = m = new QuotaMonitor(log)
                 {
-                    CredentialsPath = Path.Combine(dir, ".credentials.json"),
-                    ClaudeCachePath = Path.Combine(Path.GetDirectoryName(ClaudeCachePath)!, $"claude-quota-{Fingerprint(dir)}.json"),
+                    CredentialsPath = Path.Combine(Path.GetFullPath(d.FullPath()), ".credentials.json"),
+                    ClaudeCachePath = Path.Combine(Path.GetDirectoryName(ClaudeCachePath)!, $"claude-quota-{Fingerprint(key)}.json"),
                     HttpHandler = HttpHandler,
                 };
                 m.LoadClaudeCache(at);

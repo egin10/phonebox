@@ -333,6 +333,14 @@ public sealed class ClaudeCredentialDir
     public string Dir { get; set; } = "";
     /// <summary>The folder with a leading ~ turned into the home folder.</summary>
     public string FullPath() => Dir.StartsWith('~') ? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + Dir[1..] : Dir;
+    /// <summary>One identity for the folder however it is spelled: the full path without a trailing separator, case
+    /// folded where the file system ignores case. Its reader, schedule and cache follow it.</summary>
+    public string Key() => KeyOf(FullPath());
+    internal static string KeyOf(string path)
+    {
+        var p = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+        return OperatingSystem.IsLinux() ? p : p.ToLowerInvariant();
+    }
 }
 
 public sealed class CursorConfig
@@ -811,15 +819,13 @@ public sealed partial class ConfigStore(string path)
         c.Claude ??= new();
         c.Claude.TimeoutSec = Math.Clamp(c.Claude.TimeoutSec, 10, 3600);
         // only absolute folders (or ~/…), each once however it is spelled, and never ~/.claude itself: it is read already
-        static string Key(string path) => System.IO.Path.TrimEndingDirectorySeparator(System.IO.Path.GetFullPath(path));
-        var samePath = OperatingSystem.IsLinux() ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase;
-        var defaultClaude = Key(System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".claude"));
+        var defaultClaude = ClaudeCredentialDir.KeyOf(System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".claude"));
         c.Claude.ExtraCredentialDirs = (c.Claude.ExtraCredentialDirs ?? [])
             .OfType<ClaudeCredentialDir>()
             .Select(d => new ClaudeCredentialDir { Label = d.Label?.Trim() ?? "", Dir = d.Dir?.Trim() ?? "" })
             .Where(d => d.Label.Length is > 0 and <= ClaudeCredentialDir.MaxLabel && !d.Dir.Contains('\0')
-                && System.IO.Path.IsPathFullyQualified(d.FullPath()) && !samePath.Equals(Key(d.FullPath()), defaultClaude))
-            .DistinctBy(d => Key(d.FullPath()), samePath).DistinctBy(d => d.Label, StringComparer.OrdinalIgnoreCase).Take(10).ToArray();
+                && System.IO.Path.IsPathFullyQualified(d.FullPath()) && d.Key() != defaultClaude)
+            .DistinctBy(d => d.Key()).DistinctBy(d => d.Label, StringComparer.OrdinalIgnoreCase).Take(10).ToArray();
         c.Cursor ??= new();
         c.Antigravity ??= new();
         c.OpenCode ??= new();
