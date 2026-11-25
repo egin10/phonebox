@@ -334,7 +334,7 @@ public sealed class ClaudeCredentialDir
     /// <summary>The folder with a leading ~ turned into the home folder.</summary>
     public string FullPath() => Dir.StartsWith('~') ? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + Dir[1..] : Dir;
     /// <summary>One identity for the folder however it is spelled: the full path without a trailing separator, case
-    /// folded on Windows only (a macOS volume may be case-sensitive). Its reader, schedule and cache follow it.</summary>
+    /// folded on Windows and macOS (their volumes are case-insensitive by default), kept on Linux. Its reader, schedule and cache follow it.</summary>
     public string Key() => KeyOf(FullPath());
     /// <summary><see cref="Key"/>, or null for a path that can't be made full (a NUL, too long): that entry is dropped.</summary>
     public string? TryKey()
@@ -345,7 +345,8 @@ public sealed class ClaudeCredentialDir
     internal static string KeyOf(string path)
     {
         var p = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
-        return OperatingSystem.IsWindows() ? p.ToLowerInvariant() : p;
+        // shortcut: a case-sensitive macOS volume can't hold two accounts whose folders differ only in case; probe the volume if anyone needs that
+        return OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? p.ToLowerInvariant() : p;
     }
 }
 
