@@ -297,8 +297,13 @@ installed with. A shorter time applies to the phone card at once; for a longer o
 again, or the hook gives up before the phone does. To have a reinstalled Cursor hook cover WSL as well, turn on **Also
 watch Cursor in WSL** and start the distro first: with the option off, *Install hook* writes only the Windows hook.
 
+With other Claude Code accounts set up (the folders under **Other Claude Code accounts**), *Install hook* and *Remove
+hook* also write the `settings.json` of each of those folders that exists, with the same backup. The settings list
+those files under the button before you press it, and a folder that doesn't exist is skipped, never created. Remove
+the hook before you delete an account: *Remove hook* only reaches the folders still in the list.
+
 WorkBuddy speaks the same hook protocol. Add the same `PermissionRequest` entry to `~/.workbuddy/settings.json` by
-hand: *Install hook* writes to `~/.claude/settings.json` only. WorkBuddy keeps its sessions in `~/.workbuddy`, so the
+hand: *Install hook* writes only to Claude Code's own folders (`~/.claude` and the other accounts'). WorkBuddy keeps its sessions in `~/.workbuddy`, so the
 card takes the project name from the workspace name WorkBuddy stores
 (`~/.workbuddy/workspace-display-names.json`) instead of the folder name.
 

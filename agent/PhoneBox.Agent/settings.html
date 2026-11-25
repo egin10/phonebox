@@ -856,10 +856,11 @@ nav a.on::before { color: var(--accent); }
         <div class="row" style="margin-bottom:8px"><b style="min-width:92px" data-i18n="s.approvals.codex">Codex</b><button class="btn" id="codexHookBtn" data-i18n="s.claude.installHook">Install hook</button><span class="hint" id="codexHookState"></span></div>
         <p class="hint" id="codexHookTrust" style="display:none;margin:-2px 0 12px 100px" data-i18n-html="s.approvals.codexTrust">Required once: start a new Codex session, then trust the PhoneBox hook in <b>Settings › Hooks</b> (desktop) or <code>/hooks</code> (CLI).</p>
         <div class="row" style="margin-bottom:12px"><b style="min-width:92px" data-i18n="s.approvals.claude">Claude Code</b><button class="btn" id="claudeHookBtn" data-i18n="s.claude.installHook">Install hook</button><span class="hint" id="claudeHookState"></span></div>
+        <div class="hint" id="claudeHookTargets" style="margin:-6px 0 12px" hidden></div>
         <div class="row" style="margin-bottom:8px"><label class="switch"><input type="checkbox" data-bind="claude.phoneApprovals"><span></span></label> <span data-i18n="s.claude.askOnPhone">Ask on the phone</span></div>
         <label class="check"><input type="checkbox" data-bind="claude.shareSessionTitles"> <span data-i18n="s.claude.shareSessionTitles">Show Claude Code chat titles on the phone (Claude Code often draws them from your first prompt)</span></label>
         <label class="check"><input type="checkbox" data-bind="claude.watchWsl"> <span data-i18n="s.claude.watchWsl">Also watch Claude Code in WSL: its sessions, and its sign-in for the quota when Windows has none (a stopped distro is never started for this)</span></label>
-        <p class="hint" style="margin:10px 0 6px" data-i18n="s.claude.extraDirs">Other Claude Code accounts for the quota and sessions: a label and the folder used as CLAUDE_CONFIG_DIR. Only the label reaches the phone. The label is part of the card id: renaming it changes the id, so pick the account again in widgets set to it.</p>
+        <p class="hint" style="margin:10px 0 6px" data-i18n="s.claude.extraDirs">Other Claude Code accounts for the quota, sessions and permission prompts: a label and the folder used as CLAUDE_CONFIG_DIR. Only the label reaches the phone. The label is part of the card id: renaming it changes the id, so pick the account again in widgets set to it.</p>
         <div id="claudeDirList"></div>
         <div style="margin-bottom:10px"><button class="btn sm" id="claudeDirAdd" data-i18n="s.claude.extraDirsAdd">＋ Add an account</button></div>
         <label class="check"><input type="checkbox" data-bind="claude.onlyWhenAway"> <span data-i18n="s.claude.onlyWhenAway">Only when I am away from the PC (no keyboard or mouse for a minute)</span></label>
@@ -2803,6 +2804,17 @@ $('cameraAdd').onclick = () => {
   cfg.cameras.sources.push({ id: cameraId(), name: '', url: '', transport: 'tcp', fps: 5 });
   renderCameras(); changed();
 };
+// Which settings.json files Install / Remove hook write, shown before they do; only with other accounts set up
+function renderClaudeHookTargets(targets) {
+  const box = $('claudeHookTargets');
+  box.hidden = targets.length < 2;
+  if (box.hidden) return;
+  const state = (x) => !x.exists ? t('s.claude.hookTargetMissing') : x.installed ? '✓' : t('s.claude.notInstalled');
+  box.replaceChildren(h('div', {}, t('s.claude.hookTargets')),
+    h('ul', { style: 'margin:4px 0 6px;padding-left:18px' }, ...targets.map((x) => h('li', {},
+      x.label ? x.label + ' · ' : '', h('code', {}, x.path), ' — ', state(x)))),
+    h('div', {}, t('s.claude.hookRemoveFirst')));
+}
 // Extra Claude Code accounts: blank rows are dropped by the agent when saving
 function renderClaudeDirs() {
   const dirs = cfg.claude.extraCredentialDirs ??= [];
@@ -3913,6 +3925,7 @@ async function loadInfo() {
     ]);
     // Cursor's hook can sit in several places (Windows and each running WSL distro): list the ones that have it
     cursorHook.path = (cursorHook.paths || []).filter((p) => p.installed).map((p) => p.path).join(', ');
+    renderClaudeHookTargets(claudeHook.paths || []);
     for (const [name, hk] of [['claude', claudeHook], ['codex', codexHook], ['cursor', cursorHook]]) {
       $(`${name}HookState`).textContent = hk.installed ? t('s.claude.installedIn', { path: hk.path }) : t('s.claude.notInstalled');
       const btn = $(`${name}HookBtn`);

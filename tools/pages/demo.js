@@ -946,7 +946,12 @@
     if (path === '/api/lan') return json({ configured: true, active: true, port: 8766, restartNeeded: false, hosts: ['192.168.1.20', '100.101.102.103'], fingerprint: 'demo' });
     if (path === '/api/update') return json({ status: { agentVersion: VERSION, appVersion: VERSION, latest: VERSION, releaseUrl: 'https://github.com/ersinkoc/phonebox/releases/latest', agentUpdate: false, appUpdate: false,
       lastCheck: now() - 3600e3, state: 'idle', error: null }, auto: (await config()).updates?.auto !== false, installed: true });
-    if (path === '/api/claude/hook') return json({ installed: false, path: '~/.claude/settings.json' });
+    if (path === '/api/claude/hook') {
+      // the extra accounts' settings.json files too, so the settings show where Install would write
+      const extra = (await config()).claude?.extraCredentialDirs || [];
+      return json({ installed: false, path: '~/.claude/settings.json', paths: [{ label: null, path: '~/.claude/settings.json', exists: true, installed: false },
+        ...extra.map((d) => ({ label: d.label, path: d.dir.replace(/\/$/, '') + '/settings.json', exists: true, installed: false }))] });
+    }
     if (method !== 'GET') return json({ ok: true });
     return json({ error: 'not in the demo' }, 404);
   }
